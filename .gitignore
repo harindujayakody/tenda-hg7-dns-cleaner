@@ -1,0 +1,27 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Zip & archive files
+*.zip
+*.rar
+*.7z
+
+# State files & logs
+.fd602gw_last_ip
+.tenda_hg7_last_ip
+NM_dns_state.txt
+
+# Legacy / non-essential files
+fd602gw_reboot_tui.py
+fd602gw_reboot_v2.py
+Pc Clean & Ip Reset.bat
+Router-Reboot.bat
+write_ps1.py
+get_public_ip.py
+favicon.ico
+
+# OS generated
+.DS_Store
+Thumbs.db
