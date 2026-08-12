@@ -116,6 +116,57 @@ python tenda_reboot_tui.py --host 192.168.1.1 --user admin --password admin
 
 ---
 
+## 🔧 Adapting for Other Router Models
+
+If you are using a different router brand or model (such as TP-Link, Huawei, Netgear, ZTE, Fiberhome, or D-Link), you can easily adapt this tool by updating 4 simple settings in [`NetMaintain.py`](file:///d:/Github/Python%20Projects/Router%20Reboot/NetMaintain.py) or [`tenda_reboot_tui.py`](file:///d:/Github/Python%20Projects/Router%20Reboot/tenda_reboot_tui.py):
+
+### 1. Router IP Address (`ROUTER_HOST`)
+Change `192.168.1.1` to your router's default gateway IP:
+```python
+ROUTER_HOST = "http://192.168.0.1"  # Common for TP-Link, Netgear, D-Link
+```
+
+### 2. Router Credentials (`ROUTER_USER` & `ROUTER_PASS`)
+Set your router's login username and password:
+```python
+ROUTER_USER = "admin"
+ROUTER_PASS = "your_router_password"
+```
+
+### 3. Reboot Page URL (`CANDIDATE_REBOOT_PAGES`)
+Check the browser address bar when visiting your router's reboot page, and add its path to `CANDIDATE_REBOOT_PAGES`:
+```python
+CANDIDATE_REBOOT_PAGES = [
+    "/reboot.asp",           # Tenda HG7 / Realtek
+    "/sys_reboot.htm",       # TP-Link
+    "/html/reboot.html",     # Huawei
+    "/reboot.cgi",           # Netgear / D-Link
+    "/main/reboot.asp",      # ZTE / Fiberhome
+]
+```
+
+### 4. Reboot Button Value (`CANDIDATE_REBOOT_PAYLOADS`)
+Right-click your router's **Reboot** button in the browser, choose **Inspect**, and look at the HTML element:
+```html
+<!-- Example Tenda HG7 -->
+<input class="inner_btn" type="submit" value="Commit and Reboot">
+
+<!-- Example TP-Link / Generic -->
+<input type="submit" name="Reboot" value="Reboot">
+```
+Add your router's button text to `CANDIDATE_REBOOT_PAYLOADS`:
+```python
+CANDIDATE_REBOOT_PAYLOADS = [
+    {"reboot": "Commit and Reboot"},  # Tenda HG7
+    {"reboot": "Reboot"},             # Standard TP-Link / Netgear
+    {"sysSubmit": "Reboot"},          # Realtek / Broadcom
+    {"reboot": "1"},                  # CGI based routers
+    {}
+]
+```
+
+---
+
 ## 🛡️ License
 
 Distributed under the MIT License. See `LICENSE` for more information.
