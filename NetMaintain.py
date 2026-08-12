@@ -282,20 +282,23 @@ def get_public_ip():
 # ROUTER REBOOT (inline)
 # ════════════════════════════════════════════════════════════════════════
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-CANDIDATE_ROOTS = ["/reboot.asp", "/", "/index.asp", "/login.asp", "/admin/login.asp", "/main.asp", "/home.asp"]
+CANDIDATE_ROOTS = ["/reboot.asp", "/", "/index.asp", "/login.asp", "/admin/login.asp", "/main.asp", "/home.asp", "/getpage.gch?pid=1002&nextpage=sys_reboot_t.gch"]
 CANDIDATE_REBOOT_PAGES = [
     "/reboot.asp", "/admin/reboot.asp", "/system/reboot.asp",
     "/admin/system.asp", "/admin/maintenance.asp", "/tools/reboot.asp",
-    "/sysReboot.asp", "/Maintenance.asp"
+    "/sysReboot.asp", "/Maintenance.asp",
+    "/getpage.gch?pid=1002&nextpage=sys_reboot_t.gch", "/getpage.gch", "/sys_reboot_t.gch", "/boaform/admin/formReboot"
 ]
 CANDIDATE_REBOOT_PAYLOADS = [
-    {"reboot": "Commit and Reboot"},
+    {"reboot": "Commit and Reboot"},  # Tenda HG7
+    {"reboot": "Reboot"},             # Tdata / C-Data / Generic
     {"reboot": "1"},
-    {"reboot": "Reboot"},
     {"sysSubmit": "Commit and Reboot"},
     {"sysSubmit": "Reboot"},
+    {"IF_ACTION": "devrestart"},      # ZTE ZXHN F660
+    {"IF_ACTION": "reboot"},          # ZTE
     {"submit-url": "/reboot.asp", "reboot": "Commit and Reboot"},
-    {"submit-url": "/", "reboot": "Commit and Reboot"},
+    {"submit-url": "/", "reboot": "Reboot"},
     {}
 ]
 

@@ -158,12 +158,38 @@ Add your router's button text to `CANDIDATE_REBOOT_PAYLOADS`:
 ```python
 CANDIDATE_REBOOT_PAYLOADS = [
     {"reboot": "Commit and Reboot"},  # Tenda HG7
-    {"reboot": "Reboot"},             # Standard TP-Link / Netgear
+    {"reboot": "Reboot"},             # Tdata / C-Data / Generic
     {"sysSubmit": "Reboot"},          # Realtek / Broadcom
+    {"IF_ACTION": "devrestart"},      # ZTE ZXHN F660
     {"reboot": "1"},                  # CGI based routers
     {}
 ]
 ```
+
+---
+
+### 💡 Concrete Model Examples
+
+#### 1️⃣ Tenda HG7
+- **Default IP**: `http://192.168.1.1`
+- **Username / Password**: `admin` / `admin`
+- **Reboot Path**: `/reboot.asp`
+- **Button HTML**: `<input class="inner_btn" type="submit" value="Commit and Reboot">`
+- **Payload**: `{"reboot": "Commit and Reboot"}`
+
+#### 2️⃣ ZXHN F660 (ZTE)
+- **Default IP**: `http://192.168.1.1` (or `192.168.1.254`)
+- **Username / Password**: `admin` / `admin` (or `admin` / `user321`)
+- **Reboot Path**: `/getpage.gch?pid=1002&nextpage=sys_reboot_t.gch` or `/sys_reboot_t.gch`
+- **Button HTML**: `<input type="submit" name="IF_ACTION" value="Reboot">`
+- **Payload**: `{"IF_ACTION": "devrestart"}` or `{"IF_ACTION": "reboot"}`
+
+#### 3️⃣ Tdata / C-Data (FD602GW-DX-R410)
+- **Default IP**: `http://192.168.1.1`
+- **Username / Password**: `admin` / `admin`
+- **Reboot Path**: `/boaform/admin/formReboot` or `/admin/reboot.asp`
+- **Button HTML**: `<input type="submit" value="Reboot" name="reboot">`
+- **Payload**: `{"reboot": "Reboot"}` or `{"submit-url": "/", "reboot": "Reboot"}`
 
 ---
 
