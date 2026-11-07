@@ -22,7 +22,7 @@
 
 - 🧹 **Deep System Cleanup**: Clears Windows `%TEMP%`, `C:\Windows\Temp`, `Prefetch`, CrashDumps, and browser temporary caches to free up memory & disk space.
 - ⚡ **Network Stack Reset**: Automatically executes `ipconfig /release`, `ipconfig /flushdns`, `netsh winsock reset`, `netsh int ip reset`, and `ipconfig /renew`.
-- 🔐 **Smart Tenda HG7 Authentication**: Dual-mode login supporting HTTP Basic Authentication (`admin:admin`) and HTML Form login session cookies.
+- 🔐 **Smart Tenda HG7 Authentication**: Dual-mode login supporting HTTP Basic Authentication and HTML Form login session cookies. Credentials are never stored in this repo — they come from env vars (`TENDA_ROUTER_USER` / `TENDA_ROUTER_PASS`), CLI flags, or a prompt.
 - 🔄 **Automated Router Reboot**: Submits the `Commit and Reboot` form on `http://192.168.1.1/reboot.asp` and monitors connection status until the router is back online.
 - 🌐 **Public IP Monitor**: Fetches and compares your public WAN IP address before and after reboot to verify IP rotation.
 - 🔀 **Dynamic DNS Switcher**: Toggles active network interfaces between **Google DNS** (`8.8.8.8` / `8.8.4.4`) and **Cloudflare DNS** (`1.1.1.1` / `1.0.0.1`) on every run.
@@ -93,25 +93,30 @@ reboot_router.bat
 
 Or run directly via CLI:
 ```bash
-python tenda_reboot_tui.py --host 192.168.1.1 --user admin --password admin
+python tenda_reboot_tui.py --host 192.168.1.1
+# You will be prompted for the router username/password,
+# or set TENDA_ROUTER_USER / TENDA_ROUTER_PASS beforehand.
 ```
 
 ---
 
 ## ⚙️ Configuration
 
-If your router IP or credentials differ from defaults (`192.168.1.1` / `admin` / `admin`), edit the configuration constants:
+If your router IP differs from the default (`192.168.1.1`), set `TENDA_ROUTER_HOST`.
+Credentials are never stored in this repo — set `TENDA_ROUTER_USER` /
+`TENDA_ROUTER_PASS` env vars, pass `--user` / `--password`, or answer the
+prompt when the script asks. The tools prefer HTTPS and fall back to plain
+HTTP (with a warning) only if the router has no HTTPS.
 
 In **`NetMaintain.py`**:
 ```python
-ROUTER_HOST = "http://192.168.1.1"
-ROUTER_USER = "admin"
-ROUTER_PASS = "admin"
+ROUTER_HOST = os.environ.get("TENDA_ROUTER_HOST", "192.168.1.1")
+# credentials: TENDA_ROUTER_USER / TENDA_ROUTER_PASS env vars, or prompt
 ```
 
 In **`reboot_router.bat`**:
 ```cmd
-python tenda_reboot_tui.py --host 192.168.1.1 --user admin --password admin
+python tenda_reboot_tui.py --host 192.168.1.1
 ```
 
 ---
@@ -123,15 +128,16 @@ If you are using a different router brand or model (such as TP-Link, Huawei, Net
 ### 1. Router IP Address (`ROUTER_HOST`)
 Change `192.168.1.1` to your router's default gateway IP:
 ```python
-ROUTER_HOST = "http://192.168.0.1"  # Common for TP-Link, Netgear, D-Link
+TENDA_ROUTER_HOST = "192.168.0.1"  # Common for TP-Link, Netgear, D-Link
 ```
 
-### 2. Router Credentials (`ROUTER_USER` & `ROUTER_PASS`)
-Set your router's login username and password:
-```python
-ROUTER_USER = "admin"
-ROUTER_PASS = "your_router_password"
+### 2. Router Credentials (env vars or prompt)
+Set your router's login username and password via env vars — never in code:
+```cmd
+set TENDA_ROUTER_USER=admin
+set TENDA_ROUTER_PASS=your_router_password
 ```
+Or pass `--user` / `--password`, or answer the prompt when the script asks.
 
 ### 3. Reboot Page URL (`CANDIDATE_REBOOT_PAGES`)
 Check the browser address bar when visiting your router's reboot page, and add its path to `CANDIDATE_REBOOT_PAGES`:
@@ -172,21 +178,21 @@ CANDIDATE_REBOOT_PAYLOADS = [
 
 #### 1️⃣ Tenda HG7
 - **Default IP**: `http://192.168.1.1`
-- **Username / Password**: `admin` / `admin`
+- **Username / Password**: your router's admin credentials (factory default is commonly `admin`/`admin` — change it on the router)
 - **Reboot Path**: `/reboot.asp`
 - **Button HTML**: `<input class="inner_btn" type="submit" value="Commit and Reboot">`
 - **Payload**: `{"reboot": "Commit and Reboot"}`
 
 #### 2️⃣ ZXHN F660 (ZTE)
 - **Default IP**: `http://192.168.1.1` (or `192.168.1.254`)
-- **Username / Password**: `admin` / `admin` (or `admin` / `user321`)
+- **Username / Password**: your router's admin credentials (factory defaults are commonly `admin`/`admin` or `admin`/`user321` — change them on the router)
 - **Reboot Path**: `/getpage.gch?pid=1002&nextpage=sys_reboot_t.gch` or `/sys_reboot_t.gch`
 - **Button HTML**: `<input type="submit" name="IF_ACTION" value="Reboot">`
 - **Payload**: `{"IF_ACTION": "devrestart"}` or `{"IF_ACTION": "reboot"}`
 
 #### 3️⃣ Tdata / C-Data (FD602GW-DX-R410)
 - **Default IP**: `http://192.168.1.1`
-- **Username / Password**: `admin` / `admin`
+- **Username / Password**: your router's admin credentials (factory default is commonly `admin`/`admin` — change it on the router)
 - **Reboot Path**: `/boaform/admin/formReboot` or `/admin/reboot.asp`
 - **Button HTML**: `<input type="submit" value="Reboot" name="reboot">`
 - **Payload**: `{"reboot": "Reboot"}` or `{"submit-url": "/", "reboot": "Reboot"}`

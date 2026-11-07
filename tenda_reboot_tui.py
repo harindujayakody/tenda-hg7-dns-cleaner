@@ -16,7 +16,10 @@ import socket
 import html
 import shutil
 import argparse
+import getpass
+import urllib3
 import requests
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from urllib.parse import urljoin
 from requests.auth import HTTPBasicAuth
 from pathlib import Path
@@ -42,12 +45,10 @@ CANDIDATE_REBOOT_PAYLOADS = [
     {"submit-url": "/", "reboot": "Reboot"},
     {}
 ]
-LOGIN_CANDIDATES = [
-    ("/boaform/admin/formLogin", {"username": "admin", "password": "admin"}),
-    ("/boaform/admin/formLogin", {"user": "admin", "psw": "admin"}),
-    ("/boaform/admin/formLogin", {"admuser": "admin", "admpass": "admin"}),
-    ("/boaform/admin/formLogin_en", {"username": "admin", "password": "admin"}),
-]
+# No credentials are hardcoded in this file (Fixes #1). The router username and
+# password come from --user/--password, the TENDA_ROUTER_USER /
+# TENDA_ROUTER_PASS environment variables, or an interactive prompt — never
+# from a built-in default. Do not re-add a default password here.
 STATE_FILE = Path.home() / ".tenda_hg7_last_ip"
 # ----------------------------
 
@@ -264,13 +265,58 @@ def find_and_post_reboot(session, base):
                 continue
     return False
 
+# ---------- Credentials & transport (Fixes #1) ----------
+def resolve_credentials(args):
+    """Username/password from CLI flag > env var > interactive prompt.
+
+    There is no default password. Passing credentials on the command line
+    leaves them in shell history; prefer TENDA_ROUTER_USER /
+    TENDA_ROUTER_PASS env vars or the prompt.
+    """
+    user = args.user or os.environ.get("TENDA_ROUTER_USER")
+    password = args.password or os.environ.get("TENDA_ROUTER_PASS")
+    if not user:
+        user = input("Router username: ").strip()
+    if not user:
+        raise SystemExit("No router username given (--user, TENDA_ROUTER_USER, or prompt).")
+    if not password:
+        password = getpass.getpass("Router password: ")
+    if not password:
+        raise SystemExit("No router password given (--password, TENDA_ROUTER_PASS, or prompt).")
+    return user, password
+
+def resolve_base(host, port, scheme):
+    """Prefer HTTPS; fall back to plain HTTP only with an explicit warning.
+
+    Most Tenda HG7 firmware serves HTTP only, so the HTTPS probe will
+    usually fail — but credentials must never silently go over HTTP when
+    the router does offer HTTPS. verify=False is used for the probe and
+    session because these devices use self-signed certificates; the
+    connection is still encrypted, and this stays on the LAN.
+    """
+    if scheme == "http":
+        warn("Using plain HTTP: the router password travels unencrypted on your LAN.")
+        return f"http://{host}" + (f":{port}" if port != 80 else ""), 80 if port is None else port
+    https_port = port if port is not None else 443
+    https_base = f"https://{host}" + (f":{https_port}" if https_port != 443 else "")
+    try:
+        requests.get(https_base + "/", timeout=3, verify=False)
+        return https_base, https_port
+    except requests.RequestException:
+        pass
+    http_port = 80 if port is None else port
+    warn("Router did not answer over HTTPS; falling back to plain HTTP on the LAN — the password will be sent unencrypted.")
+    return f"http://{host}" + (f":{http_port}" if http_port != 80 else ""), http_port
+
 # ---------- Main ----------
 def main():
     parser = argparse.ArgumentParser(description="Tenda HG7 Router Rebooter (TUI)")
     parser.add_argument("--host", default="192.168.1.1", help="Router IP/host (default: 192.168.1.1)")
-    parser.add_argument("--port", type=int, default=80, help="HTTP port (default: 80)")
-    parser.add_argument("--user", default="admin", help="Username (default: admin)")
-    parser.add_argument("--password", default="admin", help="Password (default: admin)")
+    parser.add_argument("--port", type=int, default=None, help="Router web port (default: 443 for HTTPS, 80 for HTTP)")
+    parser.add_argument("--scheme", choices=["https", "http"], default="https",
+                        help="Prefer HTTPS (default); falls back to HTTP with a warning if the router has no HTTPS")
+    parser.add_argument("--user", default=None, help="Router username (or TENDA_ROUTER_USER env var, or prompt; no default)")
+    parser.add_argument("--password", default=None, help="Router password (or TENDA_ROUTER_PASS env var, or prompt; no default)")
     parser.add_argument("--no-clear", action="store_true", help="Do not clear terminal at start")
     parser.add_argument("--down-timeout", type=int, default=90, help="Seconds to wait for router to go DOWN")
     parser.add_argument("--up-timeout", type=int, default=240, help="Seconds to wait for router to come BACK UP")
@@ -280,7 +326,8 @@ def main():
     if not args.no_clear:
         clear_screen()
 
-    base = f"http://{args.host}:{args.port}" if args.port != 80 else f"http://{args.host}"
+    user, password = resolve_credentials(args)
+    base, port = resolve_base(args.host, args.port, args.scheme)
     banner("Tenda HG7  •  Router Rebooter")
 
     # --- Pre-flight: IPs ---
@@ -300,13 +347,13 @@ def main():
     # --- Login & Reboot ---
     section("Logging into Router UI (Tenda HG7)")
     session = requests.Session()
-    session.auth = HTTPBasicAuth(args.user, args.password)
+    session.auth = HTTPBasicAuth(user, password)
     session.cookies.set("userLanguage", "en")
     first_touch = first_ok(session, base, ["/reboot.asp", "/"])
     if first_touch:
         info("Session established.")
 
-    logged = smart_login(session, base, args.user, args.password)
+    logged = smart_login(session, base, user, password)
     if logged:
         ok("Login OK.")
     else:
@@ -321,14 +368,14 @@ def main():
 
     section("Watching Router State")
     info("Waiting for router to go DOWN…")
-    went_down = wait_until_down(args.host, args.port, args.down_timeout)
+    went_down = wait_until_down(args.host, port, args.down_timeout)
     if went_down:
         ok("Down detected.")
     else:
         warn("Did not observe it going down within timeout (it may still reboot).")
 
     info("Waiting for router to come BACK UP…")
-    came_up = wait_until_up(args.host, args.port, args.up_timeout)
+    came_up = wait_until_up(args.host, port, args.up_timeout)
     if came_up:
         ok("Router reachable again.")
     else:

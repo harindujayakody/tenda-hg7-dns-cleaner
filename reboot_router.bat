@@ -22,7 +22,9 @@ if /I "%CONFIRM%" NEQ "Y" (
 )
 
 :: Run the Python script with arguments
-python tenda_reboot_tui.py --host 192.168.1.1 --user admin --password admin
+python tenda_reboot_tui.py --host 192.168.1.1
+:: Credentials are NOT stored here: set TENDA_ROUTER_USER / TENDA_ROUTER_PASS,
+:: or the script will prompt for them. Never put your router password in this file.
 
 :: Pause so window stays open after completion
 echo.
