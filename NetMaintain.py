@@ -2,7 +2,7 @@
 NetMaintain.py  —  Run via LAUNCH.bat (as Administrator)
 """
 
-import os, sys, re, time, ctypes, socket, subprocess, threading
+import os, sys, re, time, ctypes, socket, subprocess, threading, getpass
 import urllib.request, json, shutil, glob
 
 # ── requests ────────────────────────────────────────────────────────────
@@ -20,9 +20,49 @@ from urllib.parse import urljoin
 # ════════════════════════════════════════════════════════════════════════
 # CONFIG
 # ════════════════════════════════════════════════════════════════════════
-ROUTER_HOST = "http://192.168.1.1"
-ROUTER_USER = "admin"
-ROUTER_PASS = "admin"
+# Router connection (Fixes #1). No credentials are hardcoded here.
+# Username/password come from TENDA_ROUTER_USER / TENDA_ROUTER_PASS, or an
+# interactive prompt -- never from a built-in default. The host may be set
+# with TENDA_ROUTER_HOST (default 192.168.1.1).
+ROUTER_HOST = os.environ.get("TENDA_ROUTER_HOST", "192.168.1.1")
+
+def get_router_credentials():
+    user = os.environ.get("TENDA_ROUTER_USER")
+    password = os.environ.get("TENDA_ROUTER_PASS")
+    if not user:
+        user = input("Router username: ").strip()
+    if not user:
+        print("ERROR: No router username given (TENDA_ROUTER_USER or prompt).")
+        sys.exit(1)
+    if not password:
+        password = getpass.getpass("Router password: ")
+    if not password:
+        print("ERROR: No router password given (TENDA_ROUTER_PASS or prompt).")
+        sys.exit(1)
+    return user, password
+
+def resolve_router_base(host):
+    """Prefer HTTPS; fall back to plain HTTP only with an explicit warning.
+
+    Most Tenda HG7 firmware serves HTTP only, so the HTTPS probe will
+    usually fail -- but credentials must never silently go over HTTP when
+    the router does offer HTTPS. verify=False is used because these
+    devices use self-signed certificates; the connection is still
+    encrypted, and this stays on the LAN.
+    """
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    for scheme in ("https", "http"):
+        url = f"{scheme}://{host}"
+        try:
+            requests.get(url, timeout=3, verify=False)
+            if scheme == "http":
+                warn("Router did not answer over HTTPS; using plain HTTP on the LAN -- the password will be sent unencrypted.")
+            return url
+        except Exception:
+            continue
+    warn("Router did not answer over HTTPS or HTTP; continuing with plain HTTP.")
+    return f"http://{host}"
 
 DNS_GOOGLE = {
     "name": "Google",
@@ -348,23 +388,25 @@ def find_form(html_text, action_contains=None):
     return None
 
 def router_reboot():
-    step_banner(3, ICO_ROUTER, "Router Reboot  192.168.1.1 (Tenda HG7)", BG_N12, N12)
+    router_user, router_pass = get_router_credentials()
+    router_host = resolve_router_base(ROUTER_HOST)
+    step_banner(3, ICO_ROUTER, f"Router Reboot  {ROUTER_HOST} (Tenda HG7)", BG_N12, N12)
     session = requests.Session()
     # Support HTTP Basic Auth (used by Tenda HG7 and many router web UIs)
-    session.auth = HTTPBasicAuth(ROUTER_USER, ROUTER_PASS)
+    session.auth = HTTPBasicAuth(router_user, router_pass)
     session.cookies.set("userLanguage", "en")
 
     info("Attempting authentication (HTTP Basic & Form Login)...")
     for p in CANDIDATE_ROOTS:
         try:
-            r = session.get(urljoin(ROUTER_HOST, p), headers={"User-Agent": UA}, timeout=6, allow_redirects=True)
+            r = session.get(urljoin(router_host, p), headers={"User-Agent": UA}, timeout=6, allow_redirects=True)
             hit = find_form(r.text, action_contains="login")
             if hit:
                 action, fields = hit
                 for k in list(fields):
-                    if "user" in k.lower() or "name" in k.lower(): fields[k] = ROUTER_USER
-                    if "pwd"  in k.lower() or "pass" in k.lower(): fields[k] = ROUTER_PASS
-                session.post(urljoin(ROUTER_HOST, action), data=fields,
+                    if "user" in k.lower() or "name" in k.lower(): fields[k] = router_user
+                    if "pwd"  in k.lower() or "pass" in k.lower(): fields[k] = router_pass
+                session.post(urljoin(router_host, action), data=fields,
                     headers={"User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded"},
                     timeout=6, allow_redirects=True)
                 break
@@ -376,16 +418,16 @@ def router_reboot():
     rebooted = False
     for p in CANDIDATE_REBOOT_PAGES:
         try:
-            r = session.get(urljoin(ROUTER_HOST, p), headers={"User-Agent": UA}, timeout=6)
+            r = session.get(urljoin(router_host, p), headers={"User-Agent": UA}, timeout=6)
             if r.status_code != 200 or not r.text: continue
             hit = find_form(r.text)
             if hit:
                 action, fields = hit
-                target_url = urljoin(ROUTER_HOST, action) if action else urljoin(ROUTER_HOST, p)
+                target_url = urljoin(router_host, action) if action else urljoin(router_host, p)
                 if not fields:
                     fields = {"reboot": "Commit and Reboot"}
                 rr = session.post(target_url, data=fields,
-                    headers={"User-Agent": UA, "Referer": urljoin(ROUTER_HOST, p), "Content-Type": "application/x-www-form-urlencoded"},
+                    headers={"User-Agent": UA, "Referer": urljoin(router_host, p), "Content-Type": "application/x-www-form-urlencoded"},
                     timeout=8, allow_redirects=True)
                 if rr.status_code in (200, 204, 302, 303):
                     rebooted = True
@@ -398,8 +440,8 @@ def router_reboot():
         for ep in endpoints:
             for payload in CANDIDATE_REBOOT_PAYLOADS:
                 try:
-                    rr = session.post(urljoin(ROUTER_HOST, ep), data=payload,
-                        headers={"User-Agent": UA, "Referer": urljoin(ROUTER_HOST, "/reboot.asp"), "Content-Type": "application/x-www-form-urlencoded"},
+                    rr = session.post(urljoin(router_host, ep), data=payload,
+                        headers={"User-Agent": UA, "Referer": urljoin(router_host, "/reboot.asp"), "Content-Type": "application/x-www-form-urlencoded"},
                         timeout=8, allow_redirects=True)
                     if rr.status_code in (200, 204, 302, 303):
                         rebooted = True
